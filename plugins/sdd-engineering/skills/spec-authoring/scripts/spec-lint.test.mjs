@@ -97,6 +97,13 @@ test('an unknown priority or lane is an error', () => {
   expectError(mutate('per RFC 4180.\n  Verify: unit (api).', 'per RFC 4180.\n  Verify: storybook.'), /unknown verify lane "storybook"/);
 });
 
+test('a user story covered only by Should/Could criteria is an error', () => {
+  const noMust = mutate('- AC-4 (Unwanted · Must)', '- AC-4 (Unwanted · Should)');
+  expectError(noMust, /US-2 has no Must acceptance criterion/);
+  const { errors } = lint(noMust);
+  assert.ok(!errors.some((e) => /US-1 has no Must/.test(e.msg)), 'US-1 still has Must criteria');
+});
+
 test('an AC without Verify is an error', () => {
   expectError(mutate('per RFC 4180.\n  Verify: unit (api).', 'per RFC 4180.'), /AC-3 needs "Verify: <lanes>"/);
 });

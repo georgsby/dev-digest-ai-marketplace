@@ -103,7 +103,7 @@ the section that owns the prefix. Every ID mentioned anywhere must be defined.
 | Prefix | Section | Required on the item |
 |---|---|---|
 | `G-n`, `NG-n` | Goals / Non-goals | — (at least one `G-n`) |
-| `US-n` | User stories | `Covered by:` with at least one `AC-n` |
+| `US-n` | User stories | `Covered by:` with at least one `AC-n`, and at least one of them `Must` |
 | `AC-n` | Acceptance criteria | `(<Pattern> · <Priority>)`, exactly one `shall`, `Verify: <lanes>` |
 | `EC-n` | Edge cases | `→` followed by an `AC-n` or `OQ-n` |
 | `NFR-n` | Non-functional requirements | a number or a checkable rule, `Verify: <lanes>` |
@@ -113,6 +113,10 @@ the section that owns the prefix. Every ID mentioned anywhere must be defined.
 
 **Priority** — `Must` (the feature is not done without it), `Should` (planned
 now, first to cut), `Could` (only if cheap). The planner cuts from the bottom.
+A user story is a mandatory requirement: every `US-n` needs at least one
+`Must` criterion, so cutting every `Should` and `Could` still leaves each
+story testable. A story with no `Must` criterion is not finished — find its
+`Must` criterion with the user, or move the story to Non-goals.
 
 **Verify lanes** — at which boundary the proving test observes the
 behaviour. Several lanes are comma-separated. Naming a lane is still *what*,
@@ -192,7 +196,8 @@ directory), else only for being a plain package or folder name. It checks:
 title and header lines (Spec ID = file name, Status, Modules), headings and
 their order, ID uniqueness and sequence, dangling ID references, every line
 format in the table above, EARS pattern ↔ keyword agreement and one `shall`,
-priorities and lanes (and lane qualifiers vs `Modules:`, warning), vague
+priorities and lanes (and lane qualifiers vs `Modules:`, warning), a
+`US-n` without a `Must` criterion, vague
 words in `AC`/`NFR` (error; warning when the item also carries a number),
 `Trusted? = no` without any `UI-n`, changed contract rows without named
 consumers (warning), `approved` with a `Blocking: yes` question, more than

@@ -89,6 +89,12 @@ or the repo itself).
 9. Never quote a code-hygiene pattern literally in a spec (a merge conflict
    marker, a focused-test modifier, a JS breakpoint keyword, an
    unfinished-work marker) — review tooling flags it, and so does the lint.
+10. **Every user story has a `Must` criterion.** A `US-n` is a mandatory
+    requirement: you do not write the spec, and do not finish it, while any
+    `US-n` lacks a `Must` `AC-n` in its `Covered by:`. Get one from the user
+    (Step 4) or move the story to Non-goals with their consent. An open
+    question cannot stand in for the missing criterion. The lint enforces
+    this as an error.
 
 ## Subagent mode
 
@@ -106,11 +112,14 @@ If `AskUserQuestion` is unavailable (you were started as a subagent):
 
 - **Resumed** with `## Answers` in the prompt (`1: a`, `2: <free text>`,
   `defaults: ok` …): treat them as the user's answers relayed by the caller.
-  If they raise no new question that changes a requirement, continue with
-  Steps 4–7 and write the spec as `draft` (`Decided by: user (relayed),
+  If they raise no new question that changes a requirement and every
+  `US-n` has a `Must` criterion (Hard rule 10), continue with Steps 4–7 and
+  write the spec as `draft` (`Decided by: user (relayed),
   <date>` on each `D-n`); never set `approved`. If they do raise one, return
   another `## Clarification needed` round instead, still without a file.
-  An unanswered question becomes `OQ-n`.
+  The same goes for a story still without a `Must` criterion: ask for one
+  (`[Criterion] US-n …`), never write the file around it. Any other
+  unanswered question becomes `OQ-n`.
 
 ## Step 0 — Load skills and context
 
@@ -246,6 +255,7 @@ each question's header with its kind:
   vs extend one, expose through another interface or not).
 - `UX` — an improvement you propose; the user may reject it.
 - `Scope` — in or out (the answer lands in Goals or Non-goals).
+- `Criterion` — a user story without a `Must` acceptance criterion.
 - `Defaults` — the bundled low-impact assumptions.
 
 Order: scope first, then module interaction, then edge cases, then UX, then
@@ -255,6 +265,12 @@ to write the draft now with the rest as `OQ-n`. Stop when no remaining
 question would change a requirement, or when the user says to stop —
 whatever is still unanswered becomes `OQ-n`, with `Blocking: yes` when an
 `AC-n` depends on it.
+
+**Before leaving Step 4**, check every user story: at least one of its
+`AC-n` must be `Must` (Hard rule 10). For a story without one, ask a
+`Criterion` question — propose the `Must` criterion you would write, or
+offer to move the story to Non-goals. Keep asking (the round budget does
+not end this check) until each story has one or is out of scope.
 
 Every **answered** question that fixed a requirement, a scope line or a
 module interaction is recorded as a `D-n` in `## Decisions` — the question,
