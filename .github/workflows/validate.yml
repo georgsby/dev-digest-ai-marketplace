@@ -1,0 +1,51 @@
+name: Validate marketplace
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # the version-bump check diffs against the PR base
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Structural linter
+        env:
+          # Version-bump check runs only on pull requests; pushes have no base to compare.
+          BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || '' }}
+        run: node scripts/validate-marketplace.mjs
+
+      - name: Install Claude Code CLI (version pinned in package-lock.json)
+        run: npm ci
+
+      - name: claude plugin validate
+        run: |
+          if node -e "process.exit(require('./.claude-plugin/marketplace.json').plugins.length ? 0 : 1)"; then
+            npx claude plugin validate . --strict
+            for dir in plugins/*/; do
+              if [ -f "${dir}.claude-plugin/plugin.json" ]; then
+                npx claude plugin validate "$dir" --strict
+              fi
+            done
+          else
+            echo "::notice::Catalog is empty; validating without --strict"
+            npx claude plugin validate .
+          fi

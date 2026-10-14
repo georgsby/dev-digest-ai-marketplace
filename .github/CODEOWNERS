@@ -1,0 +1,9 @@
+# Default owner for everything in the marketplace.
+*                                   @georgsby
+
+# The catalog and CI decide what users install; keep them owner-reviewed.
+/.claude-plugin/marketplace.json    @georgsby
+/.github/                           @georgsby
+
+# Per-plugin owners go here, e.g.:
+# /plugins/<plugin-name>/           @<owner>

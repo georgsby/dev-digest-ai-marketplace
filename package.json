@@ -1,0 +1,16 @@
+{
+  "name": "dev-digest-ai-marketplace",
+  "private": true,
+  "description": "Tooling for validating the dev-digest-ai Claude Code plugin marketplace",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "validate": "node scripts/validate-marketplace.mjs && claude plugin validate .",
+    "validate:base": "node scripts/validate-marketplace.mjs --base origin/main"
+  },
+  "devDependencies": {
+    "@anthropic-ai/claude-code": "2.1.299"
+  }
+}
