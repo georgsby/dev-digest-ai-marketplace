@@ -1,6 +1,6 @@
 {
   "name": "sdd-engineering",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Spec Driven Development workflow: spec-creator, implementation-planner, implementer and plan-verifier agents, the /implement pipeline and the /workflow-retro retrospective",
   "author": {
     "name": "georgsby"

@@ -100,30 +100,25 @@ missing.
 
 ## Step 1 — Load and orient
 
-Invoke `engineering-paved-path:engineering-insights` via the Skill tool and
-read the root `INSIGHTS.md` plus the `INSIGHTS.md` nearest to every module
-the plan touches (a project without any is fine — say so). Then read the
-Implementation Plan in full, the spec it names, and — for the field names
-and ID vocabulary you will use to build the inventory — `<specsDir>/README.md`
-(if present) and
-`${CLAUDE_PLUGIN_ROOT}/agents/implementation-planner.md` › Output.
+`engineering-paved-path:engineering-insights` and
+`sdd-engineering:spec-authoring` are preloaded from your frontmatter — their
+full bodies are already in your context, so do not invoke them again with
+the Skill tool. As `engineering-insights` says, read the `INSIGHTS.md` files
+that apply to the modules the plan touches (a project without any is fine —
+say so). Then read the Implementation Plan in full, the spec it names, and
+`<specsDir>/README.md` if present.
 
-- **spec-creator spec** (has a `Spec ID: SPEC-…` line) — Problem and user,
-  Goals / Non-goals, User stories, Acceptance criteria (EARS), Edge cases,
-  Non-functional requirements, Inputs and provenance, Interfaces touched,
-  Untrusted inputs, Decisions, Open questions. Its line formats (`Priority`,
-  `Verify:` lanes, `Blocking:`) are defined in
-  `sdd-engineering:spec-authoring` › IDs and line formats — invoke it with
-  the Skill tool unless its body is already in context, and read that
-  section.
+- **spec-creator spec** (has a `Spec ID: SPEC-…` line) — its sections and
+  line formats are `spec-authoring` › Template and › IDs and line formats.
 - **plain feature request** (`Spec: request`) — the plan's Requirements
   review rows (`R1`, `R2`…) are the spec items.
 
-From `implementation-planner.md` › Output take the task field names: Slice,
-Owns, Must not touch, Consumes, Produces, Covers, Skills, Steps,
-Acceptance, Verify; a plan's `Mode:` is `multi-agent` with Wave sections or
-`single-agent` with one `## Sequence`; `## Gates` lists the resolved gate
-commands per module.
+Plan vocabulary: task fields Slice, Owns, Must not touch, Consumes,
+Produces, Covers, Skills, Steps, Acceptance, Verify; a plan's `Mode:` is
+`multi-agent` with Wave sections or `single-agent` with one `## Sequence`;
+`## Gates` lists the resolved gate commands per module. Read
+`${CLAUDE_PLUGIN_ROOT}/agents/implementation-planner.md` › Output only when
+the plan uses a field or section this list does not cover.
 
 ## Step 2 — Inventory
 
