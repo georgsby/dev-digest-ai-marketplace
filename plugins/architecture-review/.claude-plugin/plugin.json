@@ -1,0 +1,22 @@
+{
+  "name": "architecture-review",
+  "version": "1.0.0",
+  "description": "Read-only architecture reviewer agent that checks a change set against the project's boundary rules and reports evidence-backed findings",
+  "author": {
+    "name": "georgsby"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/georgsby/dev-digest-ai-marketplace",
+  "keywords": [
+    "architecture",
+    "code-review",
+    "onion-architecture",
+    "agent"
+  ],
+  "dependencies": [
+    {
+      "name": "engineering-paved-path",
+      "version": "^1.0.0"
+    }
+  ]
+}

@@ -5,5 +5,30 @@
   "owner": {
     "name": "georgsby"
   },
-  "plugins": []
+  "plugins": [
+    {
+      "name": "engineering-paved-path",
+      "source": "./plugins/engineering-paved-path",
+      "description": "Engineering skills for TypeScript web projects: React, Fastify, Drizzle, PostgreSQL, Zod, Onion and frontend architecture (incl. Next.js rules), testing, security, and per-module engineering insights",
+      "category": "development"
+    },
+    {
+      "name": "research-tools",
+      "source": "./plugins/research-tools",
+      "description": "Read-only researcher agent that answers one concrete question from the codebase and the web, with evidence",
+      "category": "development"
+    },
+    {
+      "name": "architecture-review",
+      "source": "./plugins/architecture-review",
+      "description": "Read-only architecture reviewer agent that checks a change set against the project's boundary rules and reports evidence-backed findings",
+      "category": "development"
+    },
+    {
+      "name": "sdd-engineering",
+      "source": "./plugins/sdd-engineering",
+      "description": "Spec Driven Development workflow: spec-creator, implementation-planner, implementer and plan-verifier agents, the /implement pipeline and the /workflow-retro retrospective",
+      "category": "development"
+    }
+  ]
 }
