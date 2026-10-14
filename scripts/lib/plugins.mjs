@@ -43,6 +43,39 @@ export function compareSemver(a, b) {
   return 0;
 }
 
+// Supports the range forms plugin dependencies use: exact `1.2.3` or `=1.2.3`, `^1.2.3`, `~1.2.3`,
+// comparators (`>=1.2.0`, `<2.0.0`), space-separated AND, and `*`. Partial versions (`^1`, `~1.2`) are padded.
+export function satisfiesRange(version, range) {
+  const pad = (v) => {
+    const [core, ...rest] = v.split('-');
+    const parts = core.split('.');
+    while (parts.length < 3) parts.push('0');
+    return [parts.join('.'), ...rest].join('-');
+  };
+  const one = (cmp) => {
+    if (cmp === '*' || cmp === '') return true;
+    const m = /^(\^|~|>=|<=|>|<|=)?v?(\d+(?:\.\d+){0,2}(?:-[0-9A-Za-z.-]+)?)$/.exec(cmp);
+    if (!m) throw new Error(`unsupported version range "${range}"`);
+    const [, op = '=', raw] = m;
+    const base = pad(raw);
+    const [major, minor] = base.split('.').map(Number);
+    const c = compareSemver(version, base);
+    switch (op) {
+      case '=': return c === 0;
+      case '>=': return c >= 0;
+      case '<=': return c <= 0;
+      case '>': return c > 0;
+      case '<': return c < 0;
+      case '~': return c >= 0 && compareSemver(version, `${major}.${minor + 1}.0-0`) < 0;
+      case '^': {
+        const upper = major > 0 ? `${major + 1}.0.0-0` : minor > 0 ? `0.${minor + 1}.0-0` : `0.0.${Number(base.split('.')[2]) + 1}-0`;
+        return c >= 0 && compareSemver(version, upper) < 0;
+      }
+    }
+  };
+  return range.trim().split(/\s+/).every(one);
+}
+
 // `level` is patch, minor, major, or an explicit version that must be greater than `version`.
 export function incrementVersion(version, level) {
   const m = SEMVER_RE.exec(version);

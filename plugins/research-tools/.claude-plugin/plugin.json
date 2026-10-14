@@ -1,0 +1,16 @@
+{
+  "name": "research-tools",
+  "version": "1.0.0",
+  "description": "Read-only researcher agent that answers one concrete question from the codebase and the web, with evidence",
+  "author": {
+    "name": "georgsby"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/georgsby/dev-digest-ai-marketplace",
+  "keywords": [
+    "research",
+    "investigation",
+    "read-only",
+    "agent"
+  ]
+}

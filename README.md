@@ -51,7 +51,20 @@ Claude Code runs a cached copy of each plugin from `~/.claude/plugins/cache/`. I
 
 ## Plugins
 
-None yet. See [CONTRIBUTING.md](CONTRIBUTING.md) to add one.
+| Plugin | What it gives you | Depends on |
+|---|---|---|
+| [sdd-engineering](plugins/sdd-engineering/README.md) | Spec Driven Development: `spec-creator`, `implementation-planner`, `implementer`, `plan-verifier` agents, the `/implement` pipeline and `/workflow-retro` | the three below |
+| [research-tools](plugins/research-tools/README.md) | `researcher`, a read-only agent that answers one question from the code and the web, with evidence | — |
+| [architecture-review](plugins/architecture-review/README.md) | `architecture-reviewer`, a read-only agent that checks a change set against the project's boundary rules | engineering-paved-path |
+| [engineering-paved-path](plugins/engineering-paved-path/README.md) | Engineering skills: React, Fastify, Drizzle, PostgreSQL, Zod, TypeScript, Onion and frontend architecture, testing, security, engineering insights | — |
+
+Installing a plugin also installs its dependencies. For the whole workflow:
+
+```text
+/plugin install sdd-engineering@dev-digest-ai
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) to add a plugin.
 
 ## Documentation
 

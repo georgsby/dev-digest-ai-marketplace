@@ -16,6 +16,7 @@ import {
   changelogSection,
   compareSemver,
   git,
+  satisfiesRange,
 } from './lib/plugins.mjs';
 
 const SHA_RE = /^[0-9a-f]{40}$/;
@@ -173,6 +174,66 @@ function checkVersionBump(base, plugins) {
   }
 }
 
+// Dependencies must name plugins in this catalog (or an allowed other marketplace), and a local
+// dependency's current version must satisfy the declared range: for relative-path plugins Claude Code
+// installs whatever version is in the catalog and leaves the dependent plugin disabled if it doesn't fit.
+function checkDependencies(marketplace, localPlugins) {
+  const names = new Set(marketplace.plugins.map((p) => p?.name));
+  const versions = new Map(localPlugins.map((p) => [p.manifest.name, p.manifest.version]));
+  const allowed = new Set(marketplace.allowCrossMarketplaceDependenciesOn ?? []);
+  const graph = new Map();
+  for (const { label, manifest } of localPlugins) {
+    const deps = manifest.dependencies ?? [];
+    if (!Array.isArray(deps)) {
+      error(`${label}: plugin.json "dependencies" must be an array`);
+      continue;
+    }
+    const edges = [];
+    for (const dep of deps) {
+      const { name, version: range, marketplace: depMarketplace } = typeof dep === 'string' ? { name: dep } : (dep ?? {});
+      if (typeof name !== 'string' || !name) {
+        error(`${label}: dependency without a "name"`);
+        continue;
+      }
+      if (depMarketplace && depMarketplace !== marketplace.name) {
+        if (!allowed.has(depMarketplace)) {
+          error(`${label}: dependency "${name}" is in marketplace "${depMarketplace}", which is not in allowCrossMarketplaceDependenciesOn`);
+        }
+        continue;
+      }
+      if (name === manifest.name) error(`${label}: plugin depends on itself`);
+      if (!names.has(name)) {
+        error(`${label}: dependency "${name}" is not a plugin in this marketplace`);
+        continue;
+      }
+      edges.push(name);
+      const current = versions.get(name);
+      if (range === undefined || current === undefined) continue;
+      try {
+        if (!satisfiesRange(current, range)) {
+          error(`${label}: dependency "${name}" requires ${range}, but the catalog has ${current}`);
+        }
+      } catch (e) {
+        error(`${label}: dependency "${name}": ${e.message}`);
+      }
+    }
+    graph.set(manifest.name, edges);
+  }
+
+  const state = new Map(); // name -> 'visiting' | 'done'
+  const visit = (name, path) => {
+    if (state.get(name) === 'done') return;
+    if (state.get(name) === 'visiting') {
+      error(`dependency cycle: ${[...path.slice(path.indexOf(name)), name].join(' -> ')}`);
+      return;
+    }
+    state.set(name, 'visiting');
+    for (const next of graph.get(name) ?? []) visit(next, [...path, name]);
+    state.set(name, 'done');
+  };
+  for (const name of graph.keys()) visit(name, []);
+}
+
 function main() {
   const args = parseArgs(process.argv.slice(2));
 
@@ -226,6 +287,7 @@ function main() {
     }
   }
 
+  checkDependencies(marketplace, localPlugins);
   if (args.base) checkVersionBump(args.base, localPlugins);
 }
 

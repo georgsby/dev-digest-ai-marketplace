@@ -1,0 +1,19 @@
+{
+  "name": "engineering-paved-path",
+  "version": "1.0.0",
+  "description": "Engineering skills for TypeScript web projects: React, Fastify, Drizzle, PostgreSQL, Zod, Onion and frontend architecture (incl. Next.js rules), testing, security, and per-module engineering insights",
+  "author": {
+    "name": "georgsby"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/georgsby/dev-digest-ai-marketplace",
+  "keywords": [
+    "react",
+    "nextjs",
+    "fastify",
+    "architecture",
+    "testing",
+    "security",
+    "typescript"
+  ]
+}

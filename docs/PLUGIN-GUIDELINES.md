@@ -64,6 +64,8 @@ User-specific values (API keys, paths) go in `userConfig`. See [SECURITY.md](SEC
 - Declare them in `plugin.json` under `dependencies`, for example `["other-plugin"]` or `[{ "name": "other-plugin", "version": "^1.2.0" }]`.
 - Version ranges resolve against git tags named `<plugin>--v<version>`, so tag every release (see [RELEASES.md](RELEASES.md)).
 - Depending on another marketplace's plugin requires `allowCrossMarketplaceDependenciesOn` in `marketplace.json`. Avoid it unless needed.
+- `scripts/validate-marketplace.mjs` checks that every dependency is a plugin in this catalog, that its current version satisfies the declared range, and that there are no cycles. For relative-path plugins an unsatisfied range doesn't fail the install: Claude Code installs the catalog's copy and leaves the dependent plugin disabled.
+- Components from a dependency are addressed with its namespace: `skills: [other-plugin:skill]` in agent frontmatter, `Agent(other-plugin:agent)` in `tools`. Preloaded `skills:` apply only when the agent runs as a subagent; an agent started with `claude --agent` must load its skills with the Skill tool.
 
 Reference: https://code.claude.com/docs/en/plugins/dependencies
 
