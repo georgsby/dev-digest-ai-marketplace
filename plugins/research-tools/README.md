@@ -60,6 +60,7 @@ A structured Markdown report:
 ```text
 STATUS: ANSWERED | PARTIAL | CLARIFICATION_NEEDED
 TREE: unchanged | MODIFIED
+MODE: repo | external | combined
 # Repo research | External research: <question>
 ## Answer            direct answer + confidence (high | medium | low)
 ## Findings          numbered conclusions, each citing [E…] / [S…]
