@@ -111,6 +111,7 @@ Use when the answer lives in this codebase or its history.
 ```markdown
 STATUS: ANSWERED | PARTIAL
 TREE: unchanged | MODIFIED
+MODE: repo
 
 # Repo research: <question>
 
@@ -168,6 +169,7 @@ references, release notes, RFCs/standards, issue trackers, security advisories.
 ```markdown
 STATUS: ANSWERED | PARTIAL
 TREE: unchanged | MODIFIED
+MODE: external
 
 # External research: <question>
 
@@ -206,7 +208,7 @@ Applies to: <library> <version used in the project> (from `<path>/package.json`)
 
 When a question needs both (e.g. "does our usage of library X hit the known
 bug in the version we pin?"), run Mode A and Mode B and return **one** report:
-a single `STATUS`/`TREE` header, one **Answer**, then `## Repo findings` and
+a single `STATUS`/`TREE` header with `MODE: combined`, one **Answer**, then `## Repo findings` and
 `## External findings` (each in its mode's format, with `E`/`S` ids kept
 distinct), then one merged **Not found** and **Assumptions**.
 
@@ -216,6 +218,9 @@ distinct), then one merged **Not found** and **Assumptions**.
   `STATUS: PARTIAL` whenever a question was answered only in part or a
   sub-question in "Not found" was never resolved; `TREE: MODIFIED` whenever
   the two `git status --porcelain` snapshots differ (Hard rule 7).
+- `MODE` is set on the line after `TREE` — `repo`, `external` or `combined`,
+  matching the research you actually ran (not the one the caller asked for,
+  if they differ — then say why under **Assumptions**).
 - Every finding cites at least one `[E…]`/`[S…]`.
 - Every path is repo-relative with a line number; every URL was actually fetched.
 - **Not found** is present even if empty — write `- Nothing outstanding.`
