@@ -1,6 +1,29 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { CHANGELOG_HEADER, addChangelogSection, changelogSection, compareSemver, incrementVersion } from './plugins.mjs';
+import {
+  CHANGELOG_HEADER,
+  addChangelogSection,
+  changelogSection,
+  compareSemver,
+  incrementVersion,
+  satisfiesRange,
+} from './plugins.mjs';
+
+test('satisfiesRange', () => {
+  assert.equal(satisfiesRange('1.0.0', '^1.0.0'), true);
+  assert.equal(satisfiesRange('1.9.3', '^1.0.0'), true);
+  assert.equal(satisfiesRange('2.0.0', '^1.0.0'), false);
+  assert.equal(satisfiesRange('0.9.0', '^1.0.0'), false);
+  assert.equal(satisfiesRange('0.2.5', '^0.2.0'), true);
+  assert.equal(satisfiesRange('0.3.0', '^0.2.0'), false);
+  assert.equal(satisfiesRange('2.1.9', '~2.1.0'), true);
+  assert.equal(satisfiesRange('2.2.0', '~2.1'), false);
+  assert.equal(satisfiesRange('1.4.0', '>=1.4 <2'), true);
+  assert.equal(satisfiesRange('2.1.0', '=2.1.0'), true);
+  assert.equal(satisfiesRange('2.1.0', '2.1.1'), false);
+  assert.equal(satisfiesRange('5.0.0', '*'), true);
+  assert.throws(() => satisfiesRange('1.0.0', '1.x || 2.x'), /unsupported/);
+});
 
 test('compareSemver orders releases and pre-releases', () => {
   assert.equal(compareSemver('1.2.3', '1.2.3'), 0);
