@@ -296,15 +296,18 @@ export function lintSpec(text, fileName = 'spec.md', { modules = null } = {}) {
 
   // User stories.
   const coveredAcs = new Set();
+  const storyAcs = [];
   for (const it of byPrefix.US ?? []) {
     const refs = refsAfter(it.text, 'Covered by:');
     const acs = (refs ?? []).filter((r) => r.startsWith('AC-'));
     if (!refs || acs.length === 0) err(it.n, `${it.id} needs "Covered by: AC-n[, AC-n]"`);
     acs.forEach((a) => coveredAcs.add(a));
+    storyAcs.push({ it, acs });
   }
 
   // Acceptance criteria.
   const acs = byPrefix.AC ?? [];
+  const priorityOf = new Map();
   for (const it of acs) {
     const m = /^AC-\d+ \(([^)]*)\) — (.+)$/.exec(it.text);
     if (!m) {
@@ -315,6 +318,7 @@ export function lintSpec(text, fileName = 'spec.md', { modules = null } = {}) {
     const pattern = PATTERN_ALIASES[patternRaw];
     if (!pattern) err(it.n, `${it.id}: unknown EARS pattern "${patternRaw}" — ${Object.keys(PATTERN_ALIASES).join(', ')}`);
     if (!PRIORITIES.includes(priorityRaw)) err(it.n, `${it.id}: priority must be ${PRIORITIES.join(' | ')}`);
+    priorityOf.set(it.id, priorityRaw);
 
     const body = checkVerify({ ...it, text: m[2] });
     const shalls = (body.match(/\bshall\b/g) ?? []).length;
@@ -365,6 +369,14 @@ export function lintSpec(text, fileName = 'spec.md', { modules = null } = {}) {
     if (!coveredAcs.has(it.id)) warn(it.n, `${it.id} is not in any US-n "Covered by:" — make sure it traces to a G-n or NFR-n`);
   }
   if (acs.length > 25) warn(sections.get('Acceptance criteria (EARS)').n, `${acs.length} acceptance criteria — consider splitting the spec`);
+
+  // Every user story is a mandatory requirement: at least one of its ACs is a Must.
+  for (const { it, acs: covered } of storyAcs) {
+    const known = covered.filter((a) => priorityOf.has(a));
+    if (known.length && !known.some((a) => priorityOf.get(a) === 'Must')) {
+      err(it.n, `${it.id} has no Must acceptance criterion — every user story needs at least one "Must" AC-n in "Covered by:" (now ${known.map((a) => `${a} ${priorityOf.get(a)}`).join(', ')})`);
+    }
+  }
 
   // Edge cases.
   for (const it of byPrefix.EC ?? []) {
