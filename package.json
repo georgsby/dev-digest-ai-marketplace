@@ -8,7 +8,11 @@
   },
   "scripts": {
     "validate": "node scripts/validate-marketplace.mjs && claude plugin validate .",
-    "validate:base": "node scripts/validate-marketplace.mjs --base origin/main"
+    "validate:base": "node scripts/validate-marketplace.mjs --base origin/main",
+    "test": "node --test 'scripts/**/*.test.mjs'",
+    "bump": "node scripts/bump-version.mjs",
+    "rollback": "node scripts/rollback.mjs",
+    "release:tags": "node scripts/release-tags.mjs"
   },
   "devDependencies": {
     "@anthropic-ai/claude-code": "2.1.299"

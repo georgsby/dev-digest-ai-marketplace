@@ -6,15 +6,18 @@
 //   node scripts/validate-marketplace.mjs                  # structure only
 //   node scripts/validate-marketplace.mjs --base origin/main  # + version-bump check against base
 
-import { execFileSync } from 'node:child_process';
 import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
-import { dirname, join, relative, resolve, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join, relative, resolve, sep } from 'node:path';
+import {
+  MARKETPLACE_PATH,
+  NAME_RE,
+  ROOT,
+  SEMVER_RE,
+  changelogSection,
+  compareSemver,
+  git,
+} from './lib/plugins.mjs';
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const MARKETPLACE_PATH = join(ROOT, '.claude-plugin', 'marketplace.json');
-const NAME_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
-const SEMVER_RE = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/;
 const SHA_RE = /^[0-9a-f]{40}$/;
 const LICENSE_FILES = ['LICENSE', 'LICENSE.md', 'LICENSE.txt'];
 const LFS_POINTER = 'version https://git-lfs.github.com/spec/v1';
@@ -40,40 +43,6 @@ function readJson(path, label) {
     error(`${label}: cannot parse JSON (${e.message})`);
     return null;
   }
-}
-
-function git(args) {
-  return execFileSync('git', args, { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
-}
-
-function compareSemver(a, b) {
-  const pa = SEMVER_RE.exec(a);
-  const pb = SEMVER_RE.exec(b);
-  for (let i = 1; i <= 3; i++) {
-    const diff = Number(pa[i]) - Number(pb[i]);
-    if (diff !== 0) return Math.sign(diff);
-  }
-  const [preA, preB] = [pa[4], pb[4]];
-  if (preA === preB) return 0;
-  if (!preA) return 1;
-  if (!preB) return -1;
-  const idsA = preA.split('.');
-  const idsB = preB.split('.');
-  for (let i = 0; i < Math.max(idsA.length, idsB.length); i++) {
-    if (idsA[i] === undefined) return -1;
-    if (idsB[i] === undefined) return 1;
-    const numA = /^\d+$/.test(idsA[i]);
-    const numB = /^\d+$/.test(idsB[i]);
-    if (numA && numB) {
-      const diff = Number(idsA[i]) - Number(idsB[i]);
-      if (diff !== 0) return Math.sign(diff);
-    } else if (numA !== numB) {
-      return numA ? -1 : 1;
-    } else if (idsA[i] !== idsB[i]) {
-      return idsA[i] < idsB[i] ? -1 : 1;
-    }
-  }
-  return 0;
 }
 
 function* walk(dir) {
@@ -119,6 +88,18 @@ function checkPluginFiles(pluginDir, label) {
   }
 }
 
+// The release notes for the current version come from this section (scripts/release-tags.mjs).
+function checkChangelog(pluginDir, version, label) {
+  const path = join(pluginDir, 'CHANGELOG.md');
+  if (!existsSync(path)) {
+    error(`${label}: missing CHANGELOG.md (scripts/bump-version.mjs creates it)`);
+    return;
+  }
+  const section = changelogSection(readFileSync(path, 'utf8'), version);
+  if (section === null) error(`${label}: CHANGELOG.md has no "## [${version}]" section`);
+  else if (!section || /\bTODO\b/.test(section)) error(`${label}: CHANGELOG.md section for ${version} is empty or has a TODO`);
+}
+
 function checkRelativeEntry(entry, label) {
   const source = entry.source;
   if (!source.startsWith('./')) error(`${label}: source must start with "./"`);
@@ -145,6 +126,8 @@ function checkRelativeEntry(entry, label) {
   }
   if (typeof manifest.version !== 'string' || !SEMVER_RE.test(manifest.version)) {
     error(`${label}: plugin.json must set a SemVer "version" (see docs/RELEASES.md)`);
+  } else {
+    checkChangelog(pluginDir, manifest.version, label);
   }
   checkPluginFiles(pluginDir, label);
   return { dir: pluginDir, manifestPath, manifest };

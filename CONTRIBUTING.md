@@ -8,6 +8,16 @@ The catalog decides what code runs on users' machines, so every change goes thro
    - `.claude-plugin/plugin.json` with `name`, `version`, `description`, `author`, `license`
    - `LICENSE`
    - `README.md`
+   - `CHANGELOG.md` with a section for the first version:
+
+     ```markdown
+     # Changelog
+
+     ## [0.1.0] - YYYY-MM-DD
+
+     - Initial release
+     ```
+
    - one component, usually `skills/<skill-name>/SKILL.md`
 2. Add an entry to `.claude-plugin/marketplace.json`:
 
@@ -26,7 +36,13 @@ The catalog decides what code runs on users' machines, so every change goes thro
 
 ## Change a plugin
 
-- Any change under `plugins/<name>/` must raise `version` in its `plugin.json`. Without a bump, installed users never receive the change. CI enforces this on pull requests. See [docs/RELEASES.md](docs/RELEASES.md).
+- Any change under `plugins/<name>/` must raise `version` in its `plugin.json` and add a `CHANGELOG.md` section. Without a bump, installed users never receive the change. CI enforces both on pull requests. Use the script:
+
+  ```bash
+  node scripts/bump-version.mjs <name> <patch|minor|major> -m "What changed"
+  ```
+
+- After merge, CI tags the release and publishes release notes. See [docs/RELEASES.md](docs/RELEASES.md), which also covers rollback (`scripts/rollback.mjs`).
 - Never change a plugin's `name`. Use `displayName` for the label, or follow the rename steps in [docs/RELEASES.md](docs/RELEASES.md).
 
 ## Remove a plugin
@@ -37,7 +53,8 @@ Don't just delete the entry. Add it to `renames` with `null` (see [docs/RELEASES
 
 ```bash
 npm ci                                        # installs the pinned Claude Code CLI
-node scripts/validate-marketplace.mjs         # structure, names, LICENSE, symlinks, LFS
+npm test                                      # tests for the release scripts
+node scripts/validate-marketplace.mjs         # structure, names, LICENSE, CHANGELOG, symlinks, LFS
 node scripts/validate-marketplace.mjs --base origin/main   # + version-bump check
 npx claude plugin validate .                  # official schema check
 npx claude plugin validate ./plugins/<name> --strict

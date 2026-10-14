@@ -26,16 +26,38 @@ Start new plugins at `0.1.0`.
 
 ## Release steps
 
-1. Raise `version` in `plugins/<name>/.claude-plugin/plugin.json`.
-2. Add an entry to the plugin's `CHANGELOG.md` (or its README "Changes" section).
-3. Merge the PR into `main`.
-4. Tag the release on `main`:
+1. On a branch, make the change and bump the version:
 
    ```bash
-   claude plugin tag plugins/<name> --push
+   node scripts/bump-version.mjs <plugin> <patch|minor|major|X.Y.Z> -m "What changed" [-m "Another change"]
    ```
 
-   This creates the tag `<name>--v<version>`. Plugin dependency version ranges resolve against tags in this format.
+   This updates `version` in `plugins/<plugin>/.claude-plugin/plugin.json`, keeping the file's formatting. It also adds a `## [<version>] - <date>` section to `plugins/<plugin>/CHANGELOG.md`, creating the file if needed. Without `-m` the section gets a TODO line, and CI rejects a TODO.
+2. Open a PR. The **Validate marketplace** workflow checks that the version went up, and that `CHANGELOG.md` has a filled-in section for it.
+3. Merge into `main`. The **Release** workflow (`.github/workflows/release.yml`) then runs `scripts/release-tags.mjs`. For every plugin whose current version has no tag yet, it:
+   - creates and pushes the tag `<plugin>--v<version>` with `claude plugin tag`, which also checks that `plugin.json` and the marketplace entry agree;
+   - creates a GitHub Release with that version's `CHANGELOG.md` section as its notes.
+
+Plugin dependency version ranges resolve against tags in the `<plugin>--v<version>` format, so every released version must be tagged.
+
+### Running the release by hand
+
+If the workflow failed or was skipped:
+
+```bash
+git checkout main && git pull --tags
+node scripts/release-tags.mjs --dry-run                    # what would be tagged
+node scripts/release-tags.mjs --push --github-release      # needs gh logged in
+```
+
+Only plugins whose current version is untagged are touched, so the script is safe to run again.
+
+### Note for workflows triggered by tags
+
+Tags pushed by the Release workflow use the built-in `GITHUB_TOKEN`. GitHub does not start other workflows for events created with that token, so a workflow that runs `on: push: tags` will **not** run for these tags. That includes the site rebuild planned in `docs/specs/catalog-site.md`. Use one of these instead:
+- trigger it with `on: workflow_run` after **Release** completes;
+- have `release.yml` start it with `gh workflow run`;
+- push tags with a GitHub App token.
 
 ## How users receive it
 
@@ -44,11 +66,22 @@ Start new plugins at `0.1.0`.
 
 ## Rollback
 
-Users can't pin an older version of a relative-path plugin, so a rollback is a new release:
+Clients only update when the version goes up, and users can't pin an older version of a relative-path plugin. A rollback is therefore a **new, higher release that contains the old files**. Never reuse or lower a version number.
 
-1. Revert the faulty change on `main` (`git revert`).
-2. Raise the version again. Never reuse or lower a version number, because clients already holding it won't update.
-3. Release as usual.
+```bash
+git checkout main && git pull --tags
+node scripts/rollback.mjs <plugin> <good-version> --reason "Why the rollback is needed"
+```
+
+The script:
+1. checks that the tag `<plugin>--v<good-version>` exists, that the plugin directory has no uncommitted changes, and that `<good-version>` is older than the current version;
+2. restores `plugins/<plugin>/` exactly as it was at that tag (files added later are removed);
+3. sets the version to the next patch above the current one (`--bump minor|major|X.Y.Z` to change that);
+4. keeps the full `CHANGELOG.md` history and adds an entry naming the restored version and the reason.
+
+It only changes the working tree. Review the diff, commit it as `revert(<plugin>): roll back to <good-version>`, open a PR, and merge. The Release workflow tags it like any other release.
+
+A rollback does not touch the marketplace entry in `marketplace.json`. If the bad release also changed the entry (description, category, dependencies), restore that by hand.
 
 For a security problem, also see [SECURITY.md](SECURITY.md).
 

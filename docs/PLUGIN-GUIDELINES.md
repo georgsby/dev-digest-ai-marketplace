@@ -14,6 +14,7 @@ plugins/<plugin-name>/
 ├── .mcp.json                # optional
 ├── scripts/                 # helper scripts used by hooks or skills
 ├── README.md
+├── CHANGELOG.md             # one "## [x.y.z] - date" section per release
 └── LICENSE
 ```
 
@@ -41,7 +42,7 @@ One plugin covers one domain. Small plugins let users install only what they nee
 ```
 
 - `name`: kebab-case, identical to the marketplace entry name, and never changed after release. It namespaces every component (`<plugin-name>:<skill>`).
-- `version` **(house rule)**: required SemVer, set only here and not in the marketplace entry. See [RELEASES.md](RELEASES.md).
+- `version` **(house rule)**: required SemVer, set only here and not in the marketplace entry. Change it with `scripts/bump-version.mjs`, not by hand. See [RELEASES.md](RELEASES.md).
 - `homepage`, if set, must be a valid URL or the plugin fails to load.
 - Unknown keys are silently ignored at load time. `claude plugin validate` reports them.
 
