@@ -49,7 +49,7 @@ node evals/sdd-engineering/run.mjs compare baseline candidate        # Δ median
 Options: `--variant complete|gaps|all`, `--model` (default
 `claude-opus-5-5`), `--max-budget-usd` per run (default 5),
 `--timeout-min` (default 20). Runs use your Claude Code credentials and
-count against your plan or API bill: about $0.35–0.45 per run on Opus.
+count against your plan or API bill: about $0.36–0.47 per run on Opus.
 
 Raw stream-json transcripts, reports and `runs.jsonl` go to `results/<label>/`
 (git-ignored). Cost is Claude Code's list-price estimate (`total_cost_usd`);
