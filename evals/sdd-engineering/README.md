@@ -15,7 +15,8 @@ on `main` and one variant on `feat/csv-export`, then runs:
 ```sh
 claude -p --model <model> \
   --plugin-dir plugins --setting-sources project --strict-mcp-config \
-  --permission-mode dontAsk --allowedTools <read-only list>,Agent \
+  --permission-mode bypassPermissions --disallowedTools Write,Edit,NotebookEdit,WebFetch,WebSearch \
+  --settings '{"sandbox":{"enabled":true,"autoAllowBashIfSandboxed":true,"allowUnsandboxedCommands":false,"failIfUnavailable":true,"network":{"strictAllowlist":true}}}' \
   --output-format stream-json --verbose --no-session-persistence
 ```
 
@@ -26,7 +27,17 @@ only a subagent gets its frontmatter `skills:` preloaded. `--mode agent`
 runs it as the main thread (`claude --agent`) instead.
 
 The plugins load from this working tree, so a run measures the current
-commit. User settings, user plugins and MCP servers are not loaded.
+commit. User settings, user plugins and MCP servers are not loaded, and an
+empty `ZDOTDIR` keeps your zsh startup files out of the Bash tool.
+
+**Permissions.** Bash runs inside Claude Code's OS sandbox (Seatbelt on
+macOS, bubblewrap on Linux) without prompts: it can write only to the
+throwaway fixture repo and the per-user temp dir, has no network, and can
+neither fall back to running unsandboxed nor start when the sandbox is
+unavailable. The file-writing tools are removed. An earlier version used a
+`dontAsk` Bash allowlist; it denied `git -C <dir> …`, `$(…)`, loops and
+`${PIPESTATUS[…]}`, and the verifier sometimes returned `VERDICT: BLOCKED`
+(3 of 40 runs in `docs/COST-BASELINE.md`).
 
 | Variant | Implementation | A correct report |
 |---|---|---|
@@ -36,7 +47,8 @@ commit. User settings, user plugins and MCP servers are not loaded.
 A run **passes** when the verdict is the expected one, `TREE: unchanged`, no
 row is a false positive (`complete`) and every seeded row is flagged
 (`gaps`). A seeded row reported `MET` or missing, `VERDICT: COMPLETE` on
-`gaps`, or `TREE: MODIFIED` is a **critical error**.
+`gaps`, or `TREE: MODIFIED` is a **critical error**. A tree the verifier
+could not confirm fails the run without being critical.
 
 ## Run
 
@@ -44,6 +56,7 @@ row is a false positive (`complete`) and every seeded row is flagged
 node evals/sdd-engineering/run.mjs run --label baseline --runs 10   # variants interleaved, sequential
 node evals/sdd-engineering/run.mjs summarize baseline                # median [min–max], pass rate
 node evals/sdd-engineering/run.mjs compare baseline candidate        # Δ median, range overlap
+node evals/sdd-engineering/run.mjs regrade baseline                  # re-grade saved reports after a grader change
 ```
 
 Options: `--variant complete|gaps|all`, `--model` (default

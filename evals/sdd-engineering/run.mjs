@@ -7,6 +7,7 @@
 //                                          [--mode subagent|agent]
 //   node evals/sdd-engineering/run.mjs summarize <label>
 //   node evals/sdd-engineering/run.mjs compare <baseline-label> <candidate-label>
+//   node evals/sdd-engineering/run.mjs regrade <label>   # re-grade saved reports with the current grader
 //
 // Each run materialises fixtures/csv-export as a throwaway git repository
 // (base commit on `main`, the variant's implementation committed on
@@ -44,14 +45,25 @@ Task:
 ${PROMPT}`;
 const SPAWN_TOOLS = new Set(['Agent', 'Task']);
 
-// Read-only commands plan-verifier's Hard rule 1 allows, plus the plan's Verify commands.
-const ALLOWED_TOOLS = [
-  'Read', 'Grep', 'Glob', 'Skill',
-  'Bash(git status:*)', 'Bash(git diff:*)', 'Bash(git log:*)', 'Bash(git show:*)',
-  'Bash(git merge-base:*)', 'Bash(git rev-parse:*)', 'Bash(git branch:*)',
-  'Bash(rg:*)', 'Bash(grep:*)', 'Bash(ls:*)', 'Bash(cat:*)', 'Bash(jq:*)', 'Bash(echo:*)',
-  'Bash(node --test:*)', 'Bash(npm test:*)',
-];
+// Permissions. A Bash allowlist proved too narrow: rules match static command
+// prefixes, so `git -C <dir> …`, `$(…)`, `for` loops and `${PIPESTATUS[…]}`
+// were denied and the verifier sometimes gave up with VERDICT: BLOCKED.
+// Instead every Bash command runs inside Claude Code's OS sandbox with no
+// prompts: writes are confined to the throwaway fixture repo and the per-user
+// temp dir, the network is closed, and nothing may fall back to running
+// unsandboxed (or start at all without the sandbox). The file-writing tools
+// are removed for the whole session; TREE in the report still has to stay
+// `unchanged`.
+const SANDBOX_SETTINGS = JSON.stringify({
+  sandbox: {
+    enabled: true,
+    autoAllowBashIfSandboxed: true,
+    allowUnsandboxedCommands: false,
+    failIfUnavailable: true,
+    network: { strictAllowlist: true },
+  },
+});
+const DISALLOWED_TOOLS = ['Write', 'Edit', 'NotebookEdit', 'WebFetch', 'WebSearch'];
 
 // What a correct report says for each variant. `seeded` rows must be flagged
 // (any of PARTIAL / MISSING / DEVIATED); flagging none of them is a critical
@@ -114,8 +126,9 @@ function claudeArgs(mode, model, budget) {
     '--plugin-dir', join(REPO_ROOT, 'plugins'),
     '--setting-sources', 'project',
     '--strict-mcp-config',
-    '--permission-mode', 'dontAsk',
-    '--allowedTools', [...ALLOWED_TOOLS, ...(mode === 'agent' ? [] : ['Agent'])].join(','),
+    '--permission-mode', 'bypassPermissions',
+    '--disallowedTools', DISALLOWED_TOOLS.join(','),
+    '--settings', SANDBOX_SETTINGS,
     '--output-format', 'stream-json', '--verbose',
     '--no-session-persistence',
     '--max-budget-usd', String(budget),
@@ -126,6 +139,9 @@ function runOnce({ mode, variant, model, budget, outFile, timeoutMs }) {
   const cwd = materialise(variant);
   const env = { ...process.env };
   delete env.CLAUDECODE;
+  // An empty ZDOTDIR keeps the user's zsh startup files (and whatever they
+  // print) out of every Bash call; PATH is inherited as is.
+  env.ZDOTDIR = realpathSync(mkdtempSync(join(tmpdir(), 'sdd-eval-zdotdir-')));
   return new Promise((resolve) => {
     const started = Date.now();
     const child = spawn('claude', claudeArgs(mode, model, budget), { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
@@ -139,6 +155,7 @@ function runOnce({ mode, variant, model, budget, outFile, timeoutMs }) {
       clearTimeout(timer);
       out.end(() => {
         rmSync(cwd, { recursive: true, force: true });
+        rmSync(env.ZDOTDIR, { recursive: true, force: true });
         resolve({ code, signal, stderr: stderr.slice(-2000), wallMs: Date.now() - started });
       });
     });
@@ -249,7 +266,7 @@ const clean = (cell) => cell.replace(/[`*]/g, '').trim();
 
 function parseReport(report) {
   const verdict = report.match(/VERDICT:\s*\**\s*([A-Z]+)/)?.[1] ?? null;
-  const tree = report.match(/TREE:\s*\**\s*([a-zA-Z]+)/)?.[1] ?? null;
+  const tree = report.match(/TREE:\s*\**\s*([a-zA-Z]+)/)?.[1]?.toLowerCase() ?? null;
   const rows = {};
   let statusIdx = -1;
   for (const line of report.split('\n')) {
@@ -271,7 +288,10 @@ function grade(variant, metrics) {
   const issues = [];
   if (metrics.isError) issues.push(`run ended abnormally (${metrics.resultSubtype})`);
   if (!metrics.dispatched) issues.push('plan-verifier was not dispatched');
-  if (tree !== 'unchanged') critical.push(`TREE: ${tree ?? 'absent'}`);
+  // Only a modified tree is critical; an unconfirmed one (e.g. the verifier
+  // could not run git) fails the run but is not a missed defect.
+  if (tree === 'modified') critical.push('TREE: MODIFIED');
+  else if (tree !== 'unchanged') issues.push(`TREE not confirmed (${tree ?? 'absent'})`);
   for (const [id, what] of Object.entries(spec.seeded)) {
     const status = rows[id];
     if (!FLAGGED.has(status)) critical.push(`false negative: ${id} (${what}) reported ${status ?? 'absent'}`);
@@ -382,6 +402,18 @@ function compare(a, b) {
   return lines.join('\n') + '\n';
 }
 
+function regrade(label) {
+  const dir = join(RESULTS, label);
+  const runs = loadRuns(label);
+  const lines = runs.map((r) => {
+    const report = readFileSync(join(dir, r.file.replace(/\.jsonl$/, '.report.md')), 'utf8');
+    return JSON.stringify({ ...r, grade: grade(r.variant, { ...r, report }) });
+  });
+  writeFileSync(join(dir, 'runs.jsonl.bak'), readFileSync(join(dir, 'runs.jsonl')));
+  writeFileSync(join(dir, 'runs.jsonl'), lines.join('\n') + '\n');
+  return summarize(label);
+}
+
 // ---------------------------------------------------------------- main
 
 async function main() {
@@ -389,8 +421,9 @@ async function main() {
   const [cmd, ...rest] = args._;
   if (cmd === 'summarize') return process.stdout.write(summarize(rest[0]));
   if (cmd === 'compare') return process.stdout.write(compare(rest[0], rest[1]));
+  if (cmd === 'regrade') return process.stdout.write(regrade(rest[0]));
   if (cmd !== 'run' || !args.label || args.label === true) {
-    process.stderr.write('usage: run.mjs run --label <name> [--runs 5] [--variant complete|gaps|all] [--model claude-opus-5-5] [--max-budget-usd 5] [--mode subagent|agent]\n       run.mjs summarize <label>\n       run.mjs compare <a> <b>\n');
+    process.stderr.write('usage: run.mjs run --label <name> [--runs 5] [--variant complete|gaps|all] [--model claude-opus-5-5] [--max-budget-usd 5] [--mode subagent|agent]\n       run.mjs summarize <label>\n       run.mjs compare <a> <b>\n       run.mjs regrade <label>\n');
     process.exit(2);
   }
   const runs = Number(args.runs ?? 5);
