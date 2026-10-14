@@ -1,0 +1,6 @@
+{
+  "specsDir": "specs",
+  "plansDir": "specs/plans",
+  "modules": ["tasks"],
+  "gates": { "test": "npm test" }
+}
