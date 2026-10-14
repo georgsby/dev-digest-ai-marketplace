@@ -1,0 +1,20 @@
+@import '@fontsource/geist/400.css';
+@import '@fontsource/geist/500.css';
+@import '@fontsource/geist/600.css';
+@import '@fontsource/geist/700.css';
+@import '@fontsource/geist-mono/400.css';
+@import '@fontsource/geist-mono/500.css';
+
+html{--bg:oklch(0.17 0.006 260);--panel:oklch(0.205 0.007 260);--panel2:oklch(0.245 0.008 260);--line:oklch(0.31 0.008 260);--text:oklch(0.95 0.004 260);--muted:oklch(0.72 0.01 260);--accent:oklch(0.82 0.14 80);--accent-ink:oklch(0.22 0.03 80);--accent-text:oklch(0.84 0.13 80);--hl:oklch(0.82 0.14 80 / 0.25);--ok:oklch(0.8 0.13 155);--warn:oklch(0.8 0.13 50);--err:oklch(0.74 0.15 25);--c-plugin:oklch(0.82 0.14 80);--c-skill:oklch(0.76 0.12 250);--c-agent:oklch(0.76 0.12 305);--c-command:oklch(0.78 0.11 200);--c-hook:oklch(0.78 0.13 45);--c-mcp:oklch(0.78 0.12 155);color-scheme:dark}
+html[data-theme="light"]{--bg:oklch(0.985 0.002 260);--panel:oklch(1 0 0);--panel2:oklch(0.96 0.004 260);--line:oklch(0.89 0.006 260);--text:oklch(0.21 0.01 260);--muted:oklch(0.46 0.012 260);--accent:oklch(0.8 0.14 80);--accent-ink:oklch(0.22 0.03 80);--accent-text:oklch(0.5 0.12 70);--hl:oklch(0.85 0.14 85 / 0.45);--ok:oklch(0.5 0.12 155);--warn:oklch(0.54 0.14 50);--err:oklch(0.52 0.17 25);--c-plugin:oklch(0.68 0.14 75);--c-skill:oklch(0.58 0.14 250);--c-agent:oklch(0.58 0.14 305);--c-command:oklch(0.58 0.11 200);--c-hook:oklch(0.62 0.14 45);--c-mcp:oklch(0.58 0.12 155);color-scheme:light}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:'Geist',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--accent-text);text-decoration:none}
+a:hover{text-decoration:underline}
+input,textarea,select,button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* pseudo-class styles extracted from the design template (style-hover, style-focus-within) */
+.st0:focus-within{border-color:var(--accent) !important}
+.st1:hover{border-color:var(--muted) !important}
+.st2:hover{background:var(--panel2) !important}
