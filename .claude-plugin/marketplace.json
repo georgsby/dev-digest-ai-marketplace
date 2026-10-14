@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
-  "name": "dev-digest-ai",
-  "description": "Claude Code plugins from the dev-digest project",
+  "name": "dev-digest-ai-stable",
+  "description": "Stable channel of dev-digest-ai, pinned to the sdd-engineering 1.0.0 release (all four plugins at 1.0.0). Use it to roll back; the latest channel is dev-digest-ai.",
   "owner": {
     "name": "georgsby"
   },
