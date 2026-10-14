@@ -59,7 +59,7 @@ None yet. See [CONTRIBUTING.md](CONTRIBUTING.md) to add one.
 - [docs/PLUGIN-GUIDELINES.md](docs/PLUGIN-GUIDELINES.md): plugin structure, manifest, dependencies
 - [docs/SECURITY.md](docs/SECURITY.md): permissions, secrets, scripts, reporting vulnerabilities
 - [docs/RELEASES.md](docs/RELEASES.md): versioning, tags, updates, rollback, renames
-- [docs/MARKETPLACE-RESEARCH.md](docs/MARKETPLACE-RESEARCH.md): the research behind these rules
+- [docs/temp/MARKETPLACE-RESEARCH.md](docs/temp/MARKETPLACE-RESEARCH.md): the research behind these rules (temporary, removed after the first plugin)
 
 ## License
 

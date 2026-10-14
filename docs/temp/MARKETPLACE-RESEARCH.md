@@ -1,6 +1,6 @@
 # Marketplace research
 
-Research done on 2026-10-14, before this repository was set up. It summarises the official Claude Code docs and the practices of public marketplaces. The other docs in this folder turn it into rules.
+Research done on 2026-10-14, before this repository was set up. It summarises the official Claude Code docs and the practices of public marketplaces. The docs in `docs/` turn it into rules. This file is temporary and will be removed once the first plugin is added.
 
 ## Official requirements
 
