@@ -91,12 +91,20 @@ Feature: filter the task list by status; overdue tasks first for team leads · L
 1. [Scope] Filter by which fields? — options: status only (Recommended) / status and assignee — affects: the filter requirement
 2. [Scope] "Overdue tasks first" for team leads: is it a separate user story, and is it required for this release? — options: required / nice to have — affects: the ordering requirement and its priority
 3. [Edge] Where do tasks without a due date go when overdue tasks come first? — options: last (Recommended) / first — affects: the ordering requirement
-Defaults I will assume unless told otherwise: status matching is exact and case-sensitive; an unknown status returns an empty list; the filter does not change the store.
+4. [Edge] When is a task overdue? — options: its \`due\` date is strictly before today's date in UTC, so a task due today is not overdue (Recommended) / on or before today — affects: the ordering requirement
+5. [Edge] Can a task whose status is \`done\` be overdue? — options: no, it keeps its normal position (Recommended) / yes — affects: the ordering requirement
+6. [Modules] How does a caller ask for overdue-first? — options: an option on \`listTasks()\`, e.g. \`listTasks({ status, overdueFirst: true })\`, combinable with the filter; the default order stays insertion order (Recommended) / always order overdue first — affects: the ordering requirement, Interfaces touched
+7. [Edge] Order inside each group (overdue, the rest, no due date)? — options: insertion order, as \`listTasks()\` today (Recommended) / by due date — affects: the ordering requirement
+Defaults I will assume unless told otherwise: status matching is exact and case-sensitive; an unknown status returns an empty list; filtering and ordering do not change the store; \`listTasks()\` without options behaves as today; a \`due\` value that is not a valid ISO date counts as no due date.
 
 ## Answers
 1: status only
 2: ${storyTwoAnswer}
 3: last
+4: strictly before today's date in UTC
+5: no
+6: an option on listTasks(), as recommended
+7: insertion order
 defaults: ok
 
 Today is 2026-10-14. Write the spec as draft if nothing that changes a requirement is still open; otherwise return another "## Clarification needed" round and write no file.`;
@@ -415,7 +423,8 @@ function gradeSpecCreator(variant, metrics) {
   if (expect === 'clarify') {
     if (specs.length) issues.push(`wrote ${specs.map((sp) => sp.path).join(', ')} instead of asking`);
     if (!clarified) issues.push('no "## Clarification needed" block');
-    else if (!/Criterion|Must/i.test(report)) issues.push('clarification does not ask for a Must criterion');
+    // It must ask for the missing Must criterion itself, not about something else.
+    else if (!/\[Criterion\]|no\s+`?Must`?\s+(acceptance\s+)?criteri/i.test(report)) issues.push('clarification does not ask for a missing Must criterion');
   } else {
     if (specs.length !== 1) issues.push(`expected one spec file, found ${specs.length}`);
     for (const sp of specs) {
