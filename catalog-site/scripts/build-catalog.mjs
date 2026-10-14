@@ -45,9 +45,30 @@ function frontmatter(path) {
   try {
     return { data: parseYaml(m[1]) ?? {}, body: m[2] };
   } catch (e) {
-    warn(`${relative(ROOT, path)}: invalid frontmatter (${e.message})`);
-    return { data: {}, body: m[2] };
+    // Claude Code reads an unquoted value containing ": " (common in long
+    // agent descriptions) that strict YAML rejects, so fall back to the same
+    // lenient `key: value` / `- item` reading instead of dropping the fields.
+    warn(`${relative(ROOT, path)}: frontmatter is not strict YAML, read leniently (${e.message.split('\n')[0]})`);
+    return { data: lenientFrontmatter(m[1]), body: m[2] };
   }
+}
+
+function lenientFrontmatter(src) {
+  const data = {};
+  let listKey = null;
+  for (const line of src.split(/\r?\n/)) {
+    const item = /^\s+-\s+(.*)$/.exec(line);
+    if (item && listKey) {
+      data[listKey].push(item[1].trim());
+      continue;
+    }
+    const kv = /^([A-Za-z][\w-]*):\s*(.*)$/.exec(line);
+    if (!kv) continue;
+    const [, key, value] = kv;
+    listKey = value === '' ? key : null;
+    data[key] = value === '' ? [] : value.trim();
+  }
+  return data;
 }
 
 const toolsOf = (data) => {
@@ -244,9 +265,21 @@ function buildPlugin(entry) {
     mcp: readMcp(dir, manifest),
     scripts: readScripts(dir),
     userConfig: readUserConfig(manifest),
+    ...readDependencies(manifest),
     releases,
     readme: readReadme(dir),
   });
+}
+
+// plugin.json `dependencies`: "name", "name@marketplace" or { name, version }.
+// `deps` keeps the bare names the site links and bundles by; `dependencies`
+// keeps each version range for display.
+function readDependencies(manifest) {
+  const dependencies = asArray(manifest.dependencies)
+    .map((d) => (typeof d === 'string' ? { name: d } : d && typeof d.name === 'string' ? { name: d.name, version: d.version } : null))
+    .filter(Boolean)
+    .map(({ name, version }) => clean({ name: name.split('@')[0], marketplace: name.includes('@') ? name.split('@')[1] : undefined, version }));
+  return dependencies.length ? { deps: dependencies.map((d) => d.name), dependencies } : {};
 }
 
 const marketplacePath = join(ROOT, '.claude-plugin', 'marketplace.json');

@@ -7,6 +7,8 @@ import { tr, trp, searchVocabulary } from './i18n.js';
 
 // Real data only: generated from the marketplace by scripts/build-catalog.mjs.
 const PLUGINS=catalog.plugins;
+// "engineering-paved-path ^1.0.0" when plugin.json gives a version range.
+const depLabel=p=>name=>{const v=(p.dependencies||[]).find(d=>d.name===name)?.version;return v?`${name} ${v}`:name;};
 const TM={plugin:[tr('type.plugin'),'var(--c-plugin)'],skill:[tr('type.skill'),'var(--c-skill)'],agent:[tr('type.agent'),'var(--c-agent)'],command:[tr('type.command'),'var(--c-command)'],hook:[tr('type.hook'),'var(--c-hook)'],mcp:[tr('type.mcp'),'var(--c-mcp)']};
 const TYPES=['plugin','skill','agent','command','hook','mcp'];
 const {INTENT,STOP_PH,SYN,CONCEPTS}=searchVocabulary;const STOP=new Set(searchVocabulary.stop);
@@ -140,10 +142,10 @@ export default class App extends React.Component {
       groups.forEach(g=>g.items.forEach(it=>{it.copyInv=()=>this.copy(it.invocation,tr('toast.copied_value',{value:it.invocation}));}));
       const code=rc(p),dash=[{t:tr('surface.none_declared'),fg:'var(--muted)'}],li=a=>a.length?a.map(t=>({t,fg:'var(--text)'})):dash;
       const surface=[{label:tr('group.hooks'),items:li((p.hooks||[]).map(h=>`${h.event} · ${h.matcher} · ${h.cmd}`))},{label:tr('group.mcp'),items:li((p.mcp||[]).map(m=>`${m.name} · ${m.transport} · ${m.target}`))},{label:tr('surface.scripts'),items:li(p.scripts||[])},
-        {label:tr('surface.skill_tool_access'),items:li((p.skills||[]).filter(x=>x.tools).map(x=>`${x.name}: ${x.tools}`))},{label:tr('surface.configuration'),items:li((p.userConfig||[]).map(u=>u.key+(u.sensitive?tr('surface.secret_suffix'):'')))},{label:tr('surface.dependencies'),items:li(p.deps||[])}].map(r=>({...r,count:r.items===dash?'0':String(r.items.length)}));
+        {label:tr('surface.skill_tool_access'),items:li((p.skills||[]).filter(x=>x.tools).map(x=>`${x.name}: ${x.tools}`))},{label:tr('surface.configuration'),items:li((p.userConfig||[]).map(u=>u.key+(u.sensitive?tr('surface.secret_suffix'):'')))},{label:tr('surface.dependencies'),items:li((p.deps||[]).map(depLabel(p)))}].map(r=>({...r,count:r.items===dash?'0':String(r.items.length)}));
       v.pg={name:p.name,title:p.displayName||p.name,description:p.description,version:p.version,author:p.author,license:p.license,category:p.category,updated:fmtDate(p.updatedAt),
         tags:p.tags.map(t=>({label:'#'+t,href:'#/?tag='+t})),external:!!p.external,source:p.source,hasComponents:groups.length>0,groups,
-        config:p.userConfig||[],hasConfig:!!(p.userConfig||[]).length,deps:(p.deps||[]).map(d=>({name:d,href:'#/plugins/'+d})),hasDeps:!!(p.deps||[]).length,
+        config:p.userConfig||[],hasConfig:!!(p.userConfig||[]).length,deps:(p.deps||[]).map(d=>({name:depLabel(p)(d),href:'#/plugins/'+d})),hasDeps:!!(p.deps||[]).length,
         readme:p.readme||[],hasReadme:!!(p.readme||[]).length,releases:(p.releases||[]).map(r=>({...r,date:fmtDate(r.date)})),hasReleases:!!(p.releases||[]).length,feedHref:`plugins/${p.name}/feed.xml`,
         hasSurface:!p.external,surface,surfaceBadge:code?tr('surface.runs_code'):tr('surface.runs_no_code'),surfaceColor:code?'var(--warn)':'var(--ok)',
         ghHref:p.external?GH:`${GH}/tree/${COMMIT}/plugins/${p.name}`,issueHref:`${GH}/issues/new?title=${enc('['+p.name+'] ')}&body=${enc(`Version: ${p.version}\nPage: https://georgsby.github.io/dev-digest-ai-marketplace/plugins/${p.name}/\n\n`)}`,
