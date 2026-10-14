@@ -64,7 +64,9 @@ decisions needed`) for the calling session to ask.
    edge case, cross-module hop and UX idea, records each answer as a `D-n`
    decision, writes one spec in the
    [`spec-authoring`](skills/spec-authoring/SKILL.md) format and gates it
-   with `spec-lint` (0 errors). The spec starts as `draft`; it becomes
+   with `spec-lint` (0 errors). It does not write the spec while a user
+   story has no `Must` acceptance criterion; it asks you for one instead
+   (since 1.1.0). The spec starts as `draft`; it becomes
    `approved` only when you say so and no `Blocking: yes` question is open.
 2. **Plan.** `claude --agent sdd-engineering:implementation-planner
    <specsDir>/<date>-<slug>.md` (a plain feature request also works — the

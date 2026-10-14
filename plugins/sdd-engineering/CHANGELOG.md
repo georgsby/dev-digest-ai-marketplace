@@ -2,6 +2,11 @@
 
 All notable changes to this plugin are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] - 2026-10-14
+
+- spec-creator no longer writes or finishes a spec while a user story has no Must acceptance criterion; it asks a Criterion question instead (also in subagent mode)
+- spec-lint: a US-n whose Covered by lists no Must AC-n is an error; spec-authoring documents the rule. Specs where every story has a Must criterion are unaffected
+
 ## [1.0.1] - 2026-10-14
 
 - plan-verifier: Step 1 no longer re-invokes the skills its frontmatter preloads and no longer restates the spec template; reads implementation-planner.md only when the plan uses an unlisted field (no behaviour change; see docs/COST-BASELINE.md)
