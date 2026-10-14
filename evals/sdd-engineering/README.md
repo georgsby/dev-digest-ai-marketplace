@@ -13,11 +13,17 @@ Implementation Plan. Each run copies it to a temp directory, commits `base/`
 on `main` and one variant on `feat/csv-export`, then runs:
 
 ```sh
-claude -p --agent sdd-engineering:plan-verifier --model <model> \
+claude -p --model <model> \
   --plugin-dir plugins --setting-sources project --strict-mcp-config \
-  --permission-mode dontAsk --allowedTools <read-only list> \
+  --permission-mode dontAsk --allowedTools <read-only list>,Agent \
   --output-format stream-json --verbose --no-session-persistence
 ```
+
+The prompt asks the main thread to dispatch `sdd-engineering:plan-verifier`
+through the Agent tool and reply `DONE`; the grader reads the subagent's own
+report from the tool result. This is how `/implement` runs the verifier, and
+only a subagent gets its frontmatter `skills:` preloaded. `--mode agent`
+runs it as the main thread (`claude --agent`) instead.
 
 The plugins load from this working tree, so a run measures the current
 commit. User settings, user plugins and MCP servers are not loaded.
@@ -48,7 +54,8 @@ count against your plan or API bill: about $0.35–0.45 per run on Opus.
 Raw stream-json transcripts, reports and `runs.jsonl` go to `results/<label>/`
 (git-ignored). Cost is Claude Code's list-price estimate (`total_cost_usd`);
 API calls are distinct assistant message ids; tool calls are distinct
-`tool_use` blocks.
+`tool_use` blocks, also reported for the verifier alone. Token totals come
+from `modelUsage` for the whole run (the orchestrator turn included).
 
 **Noise rule.** A difference counts only when the two series' min–max ranges
 do not overlap. With 10 runs per series that is a strict test; anything else

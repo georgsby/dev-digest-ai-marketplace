@@ -4,14 +4,23 @@
 //
 //   node evals/sdd-engineering/run.mjs run --label <name> [--runs 5] [--variant complete|gaps|all]
 //                                          [--model claude-opus-5-5] [--max-budget-usd 5]
+//                                          [--mode subagent|agent]
 //   node evals/sdd-engineering/run.mjs summarize <label>
 //   node evals/sdd-engineering/run.mjs compare <baseline-label> <candidate-label>
 //
 // Each run materialises fixtures/csv-export as a throwaway git repository
 // (base commit on `main`, the variant's implementation committed on
-// `feat/csv-export`), runs `claude -p --agent sdd-engineering:plan-verifier`
-// with the plugins loaded from this repository's working tree, records the
-// stream-json transcript and grades the report. Results go to results/<label>/.
+// `feat/csv-export`), runs `claude -p` with the plugins loaded from this
+// repository's working tree, records the stream-json transcript and grades
+// the report. Results go to results/<label>/.
+//
+// --mode subagent (default) dispatches plan-verifier through the Agent tool,
+// the way /implement runs it: frontmatter `skills:` are preloaded only for a
+// subagent. --mode agent runs it as the main thread (`claude --agent`), where
+// they are not. Metrics are reported for the whole run and for the verifier
+// alone (subagent messages carry parent_tool_use_id). Token totals come from
+// the result event's modelUsage: stream-json usage on subagent messages is a
+// partial snapshot, so per-scope token splits are not reported.
 
 import { spawn, execFileSync } from 'node:child_process';
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync, existsSync, createWriteStream } from 'node:fs';
@@ -27,6 +36,13 @@ const RESULTS = join(HERE, 'results');
 const PROMPT = `Verify the Implementation Plan \`specs/plans/2026-10-01-csv-export.md\` against the working tree.
 The work is committed on branch \`feat/csv-export\`; the base branch is \`main\`.
 Test environment: local Node 22, no services needed. Return your report.`;
+
+const DISPATCH_PROMPT = `Dispatch the \`sdd-engineering:plan-verifier\` subagent with the Agent tool, passing the task below word for word.
+Do not inspect or verify anything yourself. When it returns, reply with the single word DONE.
+
+Task:
+${PROMPT}`;
+const SPAWN_TOOLS = new Set(['Agent', 'Task']);
 
 // Read-only commands plan-verifier's Hard rule 1 allows, plus the plan's Verify commands.
 const ALLOWED_TOOLS = [
@@ -90,34 +106,34 @@ function materialise(variant) {
 
 // ---------------------------------------------------------------- run
 
-function claudeArgs(model, budget) {
+function claudeArgs(mode, model, budget) {
   return [
     '-p',
-    '--agent', 'sdd-engineering:plan-verifier',
+    ...(mode === 'agent' ? ['--agent', 'sdd-engineering:plan-verifier'] : []),
     '--model', model,
     '--plugin-dir', join(REPO_ROOT, 'plugins'),
     '--setting-sources', 'project',
     '--strict-mcp-config',
     '--permission-mode', 'dontAsk',
-    '--allowedTools', ALLOWED_TOOLS.join(','),
+    '--allowedTools', [...ALLOWED_TOOLS, ...(mode === 'agent' ? [] : ['Agent'])].join(','),
     '--output-format', 'stream-json', '--verbose',
     '--no-session-persistence',
     '--max-budget-usd', String(budget),
   ];
 }
 
-function runOnce({ variant, model, budget, outFile, timeoutMs }) {
+function runOnce({ mode, variant, model, budget, outFile, timeoutMs }) {
   const cwd = materialise(variant);
   const env = { ...process.env };
   delete env.CLAUDECODE;
   return new Promise((resolve) => {
     const started = Date.now();
-    const child = spawn('claude', claudeArgs(model, budget), { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = spawn('claude', claudeArgs(mode, model, budget), { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
     const out = createWriteStream(outFile);
     let stderr = '';
     child.stdout.pipe(out);
     child.stderr.on('data', (d) => { stderr += d; });
-    child.stdin.end(PROMPT);
+    child.stdin.end(mode === 'agent' ? PROMPT : DISPATCH_PROMPT);
     const timer = setTimeout(() => child.kill('SIGTERM'), timeoutMs);
     child.on('close', (code, signal) => {
       clearTimeout(timer);
@@ -131,42 +147,81 @@ function runOnce({ variant, model, budget, outFile, timeoutMs }) {
 
 // ---------------------------------------------------------------- parse + grade
 
-function parseTranscript(file) {
+const emptyTokens = () => ({ input: 0, output: 0, cacheRead: 0, cacheCreation: 0 });
+
+function addUsage(tokens, u) {
+  tokens.input += u?.input_tokens ?? 0;
+  tokens.output += u?.output_tokens ?? 0;
+  tokens.cacheRead += u?.cache_read_input_tokens ?? 0;
+  tokens.cacheCreation += u?.cache_creation_input_tokens ?? 0;
+}
+
+const textOf = (content) => typeof content === 'string'
+  ? content
+  : (content ?? []).filter((b) => b.type === 'text').map((b) => b.text).join('\n');
+
+// Splits the run into the main thread and the verifier subagent. In agent
+// mode the main thread *is* the verifier.
+function parseTranscript(file, mode) {
   const lines = readFileSync(file, 'utf8').split('\n').filter(Boolean);
-  const apiCalls = new Set();
-  const toolUses = new Map();
+  const scopes = { main: { calls: new Map(), tools: new Map() }, sub: { calls: new Map(), tools: new Map() } };
+  const skills = [];
+  let spawnId = null;
+  let subReport = null;
   let init = null;
   let result = null;
   for (const line of lines) {
     let ev;
     try { ev = JSON.parse(line); } catch { continue; }
     if (ev.type === 'system' && ev.subtype === 'init') init = ev;
+    const scope = ev.parent_tool_use_id ? scopes.sub : scopes.main;
     if (ev.type === 'assistant' && ev.message) {
-      if (ev.message.id) apiCalls.add(ev.message.id);
+      // stream-json emits one event per content block; usage repeats per message id, keep the last.
+      if (ev.message.id) scope.calls.set(ev.message.id, ev.message.usage);
       for (const block of ev.message.content ?? []) {
-        if (block.type === 'tool_use') toolUses.set(block.id, block.name);
+        if (block.type !== 'tool_use') continue;
+        scope.tools.set(block.id, block.name);
+        if (block.name === 'Skill') skills.push(`${ev.parent_tool_use_id ? 'sub' : 'main'}:${block.input?.skill}`);
+        if (!ev.parent_tool_use_id && SPAWN_TOOLS.has(block.name) && !spawnId) spawnId = block.id;
+      }
+    }
+    if (ev.type === 'user' && !ev.parent_tool_use_id && spawnId) {
+      for (const block of Array.isArray(ev.message?.content) ? ev.message.content : []) {
+        if (block.type === 'tool_result' && block.tool_use_id === spawnId) subReport = textOf(block.content);
       }
     }
     if (ev.type === 'result') result = ev;
   }
-  const tokens = { input: 0, output: 0, cacheRead: 0, cacheCreation: 0 };
-  const models = [];
-  if (result?.modelUsage && Object.keys(result.modelUsage).length) {
-    for (const [model, u] of Object.entries(result.modelUsage)) {
-      models.push(model);
-      tokens.input += u.inputTokens ?? 0;
-      tokens.output += u.outputTokens ?? 0;
-      tokens.cacheRead += u.cacheReadInputTokens ?? 0;
-      tokens.cacheCreation += u.cacheCreationInputTokens ?? 0;
+  const summarise = (sc) => {
+    const tokens = emptyTokens();
+    for (const u of sc.calls.values()) addUsage(tokens, u);
+    const toolsByName = {};
+    for (const name of sc.tools.values()) toolsByName[name] = (toolsByName[name] ?? 0) + 1;
+    return { apiCalls: sc.calls.size, toolCalls: sc.tools.size, toolsByName, tokens };
+  };
+  const main = summarise(scopes.main);
+  const sub = summarise(scopes.sub);
+  const all = {
+    apiCalls: main.apiCalls + sub.apiCalls,
+    toolCalls: main.toolCalls + sub.toolCalls,
+    tokens: Object.fromEntries(Object.keys(main.tokens).map((k) => [k, main.tokens[k] + sub.tokens[k]])),
+  };
+  // Prefer Claude Code's own per-model totals for the whole run when present.
+  const models = Object.keys(result?.modelUsage ?? {});
+  if (models.length) {
+    const t = emptyTokens();
+    for (const u of Object.values(result.modelUsage)) {
+      t.input += u.inputTokens ?? 0;
+      t.output += u.outputTokens ?? 0;
+      t.cacheRead += u.cacheReadInputTokens ?? 0;
+      t.cacheCreation += u.cacheCreationInputTokens ?? 0;
     }
-  } else if (result?.usage) {
-    tokens.input = result.usage.input_tokens ?? 0;
-    tokens.output = result.usage.output_tokens ?? 0;
-    tokens.cacheRead = result.usage.cache_read_input_tokens ?? 0;
-    tokens.cacheCreation = result.usage.cache_creation_input_tokens ?? 0;
+    all.tokens = t;
   }
-  const toolsByName = {};
-  for (const name of toolUses.values()) toolsByName[name] = (toolsByName[name] ?? 0) + 1;
+  const verifier = mode === 'agent' ? main : sub;
+  const report = mode === 'agent'
+    ? (typeof result?.result === 'string' ? result.result : '')
+    : (subReport ?? '');
   return {
     claudeVersion: init?.claude_code_version ?? null,
     initModel: init?.model ?? null,
@@ -176,14 +231,17 @@ function parseTranscript(file) {
     durationMs: result?.duration_ms ?? null,
     durationApiMs: result?.duration_api_ms ?? null,
     numTurns: result?.num_turns ?? null,
-    apiCalls: apiCalls.size,
-    toolCalls: toolUses.size,
-    toolsByName,
+    apiCalls: all.apiCalls,
+    toolCalls: all.toolCalls,
+    tokens: all.tokens,
+    verifier,
+    orchestrator: mode === 'agent' ? null : main,
+    skills,
+    dispatched: mode === 'agent' || Boolean(spawnId),
     permissionDenials: result?.permission_denials?.length ?? 0,
-    tokens,
     isError: result ? Boolean(result.is_error) : true,
     resultSubtype: result?.subtype ?? 'missing',
-    report: typeof result?.result === 'string' ? result.result : '',
+    report,
   };
 }
 
@@ -212,6 +270,7 @@ function grade(variant, metrics) {
   const critical = [];
   const issues = [];
   if (metrics.isError) issues.push(`run ended abnormally (${metrics.resultSubtype})`);
+  if (!metrics.dispatched) issues.push('plan-verifier was not dispatched');
   if (tree !== 'unchanged') critical.push(`TREE: ${tree ?? 'absent'}`);
   for (const [id, what] of Object.entries(spec.seeded)) {
     const status = rows[id];
@@ -248,6 +307,8 @@ const METRICS = [
   ['output', 'Output tokens', (r) => r.tokens.output, (v) => Math.round(v).toLocaleString('en-US')],
   ['apiCalls', 'API calls', (r) => r.apiCalls, (v) => String(v)],
   ['toolCalls', 'Tool calls', (r) => r.toolCalls, (v) => String(v)],
+  ['vApiCalls', 'Verifier: API calls', (r) => r.verifier.apiCalls, (v) => String(v)],
+  ['vToolCalls', 'Verifier: tool calls', (r) => r.verifier.toolCalls, (v) => String(v)],
 ];
 
 function loadRuns(label) {
@@ -269,6 +330,7 @@ function summarize(label) {
   lines.push(`- Plugin: \`sdd-engineering@${meta.pluginVersion}\` at \`${meta.sha}\`${meta.pluginsDirty ? ' (plugins/ had uncommitted changes)' : ''}`);
   lines.push(`- Model requested: \`${meta.model}\`; models used: ${[...new Set(runs.flatMap((r) => r.models))].map((m) => `\`${m}\``).join(', ')}`);
   lines.push(`- Claude Code: ${[...new Set(runs.map((r) => r.claudeVersion))].join(', ')}`);
+  lines.push(`- Mode: ${meta.mode ?? 'agent'}`);
   lines.push(`- Runs: ${Object.keys(VARIANTS).map((v) => `${v} × ${groups[v]?.length ?? 0}`).join(', ')}, sequential`, '');
   lines.push(`| Metric | ${Object.keys(groups).map((g) => `${g}: median [min–max]`).join(' | ')} |`);
   lines.push(`|---|${Object.keys(groups).map(() => '---').join('|')}|`);
@@ -328,11 +390,13 @@ async function main() {
   if (cmd === 'summarize') return process.stdout.write(summarize(rest[0]));
   if (cmd === 'compare') return process.stdout.write(compare(rest[0], rest[1]));
   if (cmd !== 'run' || !args.label || args.label === true) {
-    process.stderr.write('usage: run.mjs run --label <name> [--runs 5] [--variant complete|gaps|all] [--model claude-opus-5-5] [--max-budget-usd 5]\n       run.mjs summarize <label>\n       run.mjs compare <a> <b>\n');
+    process.stderr.write('usage: run.mjs run --label <name> [--runs 5] [--variant complete|gaps|all] [--model claude-opus-5-5] [--max-budget-usd 5] [--mode subagent|agent]\n       run.mjs summarize <label>\n       run.mjs compare <a> <b>\n');
     process.exit(2);
   }
   const runs = Number(args.runs ?? 5);
   const model = args.model ?? 'claude-opus-5-5';
+  const mode = args.mode ?? 'subagent';
+  if (!['subagent', 'agent'].includes(mode)) throw new Error(`--mode must be subagent or agent, got ${mode}`);
   const budget = Number(args['max-budget-usd'] ?? 5);
   const variants = !args.variant || args.variant === 'all' ? Object.keys(VARIANTS) : [args.variant];
   const timeoutMs = Number(args['timeout-min'] ?? 20) * 60_000;
@@ -343,6 +407,7 @@ async function main() {
     pluginsDirty: git('status', '--porcelain', '--', 'plugins').length > 0,
     pluginVersion: JSON.parse(readFileSync(join(REPO_ROOT, 'plugins/sdd-engineering/.claude-plugin/plugin.json'), 'utf8')).version,
     model,
+    mode,
     budgetUsd: budget,
     startedAt: new Date().toISOString(),
   };
@@ -350,21 +415,21 @@ async function main() {
   mkdirSync(dir, { recursive: true });
   const runsFile = join(dir, 'runs.jsonl');
   const existing = existsSync(runsFile) ? readFileSync(runsFile, 'utf8').split('\n').filter(Boolean).length : 0;
-  process.stderr.write(`label=${args.label} sha=${meta.sha}${meta.pluginsDirty ? ' (plugins dirty)' : ''} model=${model} runs=${runs}×[${variants}] existing=${existing}\n`);
+  process.stderr.write(`label=${args.label} sha=${meta.sha}${meta.pluginsDirty ? ' (plugins dirty)' : ''} model=${model} mode=${mode} runs=${runs}×[${variants}] existing=${existing}\n`);
 
   // Interleave variants so drift over time hits both equally.
   for (let n = 1; n <= runs; n++) {
     for (const variant of variants) {
       const stamp = `${variant}-${String(existing + n).padStart(2, '0')}-${Date.now()}`;
       const outFile = join(dir, `${stamp}.jsonl`);
-      const proc = await runOnce({ variant, model, budget, outFile, timeoutMs });
-      const metrics = parseTranscript(outFile);
+      const proc = await runOnce({ mode, variant, model, budget, outFile, timeoutMs });
+      const metrics = parseTranscript(outFile, mode);
       const g = grade(variant, metrics);
       const { report, ...kept } = metrics;
       writeFileSync(join(dir, `${stamp}.report.md`), report);
       const record = { label: args.label, variant, n, file: `${stamp}.jsonl`, meta, exit: proc.code, signal: proc.signal, wallMs: proc.wallMs, stderrTail: proc.stderr || undefined, ...kept, grade: g };
       writeFileSync(runsFile, JSON.stringify(record) + '\n', { flag: 'a' });
-      process.stderr.write(`${variant} #${n}: ${g.pass ? 'PASS' : 'FAIL'} verdict=${g.verdict} rows=${g.rowCount} cost=$${metrics.costUsd?.toFixed(3)} ${(metrics.durationMs / 1000).toFixed(0)}s api=${metrics.apiCalls} tools=${metrics.toolCalls} denied=${metrics.permissionDenials}${g.critical.length ? ` CRITICAL: ${g.critical.join('; ')}` : ''}${g.issues.length ? ` issues: ${g.issues.join('; ')}` : ''}\n`);
+      process.stderr.write(`${variant} #${n}: ${g.pass ? 'PASS' : 'FAIL'} verdict=${g.verdict} rows=${g.rowCount} cost=$${metrics.costUsd?.toFixed(3)} ${(metrics.durationMs / 1000).toFixed(0)}s api=${metrics.apiCalls} tools=${metrics.toolCalls} verifier(api=${metrics.verifier.apiCalls} tools=${metrics.verifier.toolCalls}) skills=[${metrics.skills.join(',')}] denied=${metrics.permissionDenials}${g.critical.length ? ` CRITICAL: ${g.critical.join('; ')}` : ''}${g.issues.length ? ` issues: ${g.issues.join('; ')}` : ''}\n`);
     }
   }
   process.stdout.write(summarize(args.label));
