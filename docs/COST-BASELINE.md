@@ -174,10 +174,14 @@ It ships as `sdd-engineering@1.0.1`; both series above ran with
 
 ## Next steps
 
-1. Fix the harness: allow `git -C <dir> …`, `find` and loop constructs in
-   the allowlist, and teach the grader that `TREE: not checked` with
-   `VERDICT: BLOCKED` is a harness failure, not a false negative. Then rerun
-   both series to get a green gate.
+1. ~~Fix the harness.~~ Done: Bash now runs in Claude Code's OS sandbox
+   without prompts (writes confined to the fixture repo, no network)
+   instead of a `dontAsk` allowlist, and a tree the verifier could not
+   confirm is no longer graded critical. A 3 × 2 check run on the new
+   harness passed 6/6 with 0 permission denials. `run.mjs regrade` applied
+   the new grader to both series above: 0 critical errors in each; the
+   three `BLOCKED` runs still count as failures. The two series were not
+   rerun, so their numbers above stay tied to the old harness.
 2. Another candidate is the per-call prefix: the ~30k-token cache
    write (the system prompt plus the preloaded `spec-authoring` and
    `engineering-insights`) is paid on every run and read on every API call.
