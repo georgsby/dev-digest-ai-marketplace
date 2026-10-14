@@ -169,6 +169,8 @@ and call counts.
 
 The change stays in the tree as a cleanup: it removes contradictory
 instructions and showed no regression. It is not counted as a cost saving.
+It ships as `sdd-engineering@1.0.1`; both series above ran with
+`plugin.json` still at 1.0.0.
 
 ## Next steps
 
