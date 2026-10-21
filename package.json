@@ -15,6 +15,6 @@
     "release:tags": "node scripts/release-tags.mjs"
   },
   "devDependencies": {
-    "@anthropic-ai/claude-code": "2.1.299"
+    "@anthropic-ai/claude-code": "2.1.302"
   }
 }
